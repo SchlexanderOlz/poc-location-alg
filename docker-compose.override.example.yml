@@ -1,0 +1,6 @@
+# Nur lokal: nach docker-compose.override.yml kopieren (ist in .gitignore),
+# dann ist die App unter http://localhost:3000 erreichbar.
+# Coolify braucht das nicht – dort wird die Domain im UI auf app:3000 gesetzt.
+services:
+  app:
+    ports: ["3000:3000"]

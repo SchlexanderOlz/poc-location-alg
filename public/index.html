@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Max-N-Standorte ohne verschluckte Ausreißer</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  :root {
+    --bg: #ffffff; --fg: #0f172a; --muted: #64748b; --line: #e2e8f0;
+    --accent: #2563eb; --accent-soft: #dbeafe; --group: #ea580c; --best: #dcfce7;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px; color: var(--fg);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  #app { position: fixed; inset: 0; }
+  #map { position: absolute; inset: 0; background: #e5e7eb; }
+
+  #searchArea {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 1000;
+    border: 0; border-radius: 999px; padding: 9px 16px; background: var(--bg); color: var(--accent);
+    font: inherit; font-weight: 600; box-shadow: 0 2px 10px rgba(0,0,0,.25); cursor: pointer; white-space: nowrap;
+  }
+  #searchArea[hidden] { display: none; }
+
+  #panel {
+    position: absolute; top: 10px; right: 10px; z-index: 1000; width: 400px;
+    max-height: calc(100% - 50px); display: flex; flex-direction: column;
+    background: var(--bg); border-radius: 10px; box-shadow: 0 2px 14px rgba(0,0,0,.2); overflow: hidden;
+  }
+  #panel header {
+    display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line);
+  }
+  #panel header h1 { font-size: 15px; margin: 0; flex: 1; white-space: nowrap; }
+  #summary { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  #toggle { border: 1px solid var(--line); background: var(--bg); border-radius: 6px; padding: 4px 9px; cursor: pointer; font: inherit; }
+  #panelBody { overflow: auto; padding: 4px 12px 12px; }
+  #panel.collapsed #panelBody { display: none; }
+  #panel.collapsed header { border-bottom: 0; }
+
+  section { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  section:last-of-type { border-bottom: 0; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
+
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg label { flex: 1; text-align: center; cursor: pointer; padding: 7px 4px; font-size: 12.5px; line-height: 1.2; border-right: 1px solid var(--line); }
+  .seg label:last-child { border-right: 0; }
+  .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .seg label:has(input:checked) { background: var(--accent); color: #fff; }
+  .seg label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -3px; }
+
+  .row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .row input[type=range] { flex: 1; }
+  #nValue { font-variant-numeric: tabular-nums; min-width: 3.5em; text-align: right; font-weight: 600; }
+
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0; font-variant-numeric: tabular-nums; }
+  dt { color: var(--muted); }
+  dd { margin: 0; text-align: right; }
+  .warn { color: #b45309; font-size: 12.5px; margin-top: 6px; }
+  .muted { color: var(--muted); font-size: 12px; }
+
+  button.primary {
+    border: 0; border-radius: 8px; padding: 8px 12px; background: var(--accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button:disabled { opacity: .55; cursor: default; }
+
+  .tablewrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; margin-top: 8px; }
+  th, td { padding: 3px 4px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 600; }
+  td.best { background: var(--best); font-weight: 600; }
+
+  details summary { cursor: pointer; font-weight: 600; }
+  details p { margin: 8px 0; line-height: 1.45; }
+  pre { background: #f1f5f9; border-radius: 6px; padding: 8px; overflow-x: auto; font-size: 11.5px; line-height: 1.4; }
+  .legend { display: flex; gap: 14px; margin-top: 8px; font-size: 12px; color: var(--muted); align-items: center; }
+  .dot { display: inline-block; border-radius: 50%; vertical-align: middle; margin-right: 4px; }
+
+  @media (max-width: 700px) {
+    #app { display: flex; flex-direction: column; }
+    #map { position: relative; inset: auto; flex: 1; min-height: 0; }
+    #panel { position: relative; top: auto; right: auto; width: auto; max-height: 52vh; border-radius: 12px 12px 0 0;
+             padding-bottom: env(safe-area-inset-bottom); }
+    #searchArea { top: 10px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="map"></div>
+  <button id="searchArea" type="button" hidden>In diesem Bereich suchen</button>
+
+  <aside id="panel" aria-label="Steuerung">
+    <header>
+      <h1>Max-N-Standorte</h1>
+      <span id="summary"></span>
+      <button id="toggle" type="button" aria-expanded="true" aria-controls="panelBody">Einklappen</button>
+    </header>
+    <div id="panelBody">
+      <section>
+        <h2>Modus</h2>
+        <div class="seg" role="radiogroup">
+          <label><input type="radio" name="mode" value="grid" checked>Raster (max N)</label>
+          <label><input type="radio" name="mode" value="all">Alles laden (naiv)</label>
+          <label><input type="radio" name="mode" value="area">Bereich (alle im Ausschnitt)</label>
+        </div>
+        <div class="row">
+          <label for="n">N</label>
+          <input id="n" type="range" min="50" max="1000" step="10" value="300">
+          <span id="nValue">300</span>
+        </div>
+        <div class="row">
+          <label><input id="showGrid" type="checkbox"> Raster anzeigen</label>
+        </div>
+        <div class="legend">
+          <span><span class="dot" style="width:8px;height:8px;background:#3b82f6"></span>einzelner Standort</span>
+          <span><span class="dot" style="width:14px;height:14px;background:#f97316;opacity:.7"></span>Gruppe (Größe = Anzahl)</span>
+        </div>
+      </section>
+
+      <section>
+        <h2>Letzte Anfrage</h2>
+        <dl id="metrics"><dt>–</dt><dd></dd></dl>
+        <div id="warn" class="warn" hidden></div>
+      </section>
+
+      <section>
+        <h2>Vergleich</h2>
+        <button id="compare" class="primary" type="button">Vergleich starten</button>
+        <span id="compareStatus" class="muted"></span>
+        <div class="tablewrap"><table id="compareTable" hidden></table></div>
+        <p class="muted">Alle drei Modi je 5× für den aktuellen Ausschnitt, ohne Cache, inkl. Rendern; gezeigt wird der Median („Netz“ = Netzwerk + Parse).
+          Bei 5000 Punkten sind die Unterschiede moderat. Mit <code>SEED_COUNT=100000</code> werden sie deutlich.</p>
+      </section>
+
+      <section>
+        <h2>Verlauf (letzte 10)</h2>
+        <div class="tablewrap"><table id="history"></table></div>
+      </section>
+
+      <section>
+        <details>
+          <summary>Wie funktioniert das?</summary>
+          <p><b>Problem:</b> Mit <code>LIMIT N</code>, Zufallsauswahl oder „Top N nach Kapazität“ landen fast nur Punkte
+            aus dichten Gebieten wie Wien auf der Karte, und der einsame Wanderparkplatz im Kaunertal fällt weg. Lädt man dagegen
+            alles, wird der Browser bei vielen Punkten langsam.</p>
+          <p><b>Raster:</b> Über den Ausschnitt wird ein Raster gelegt, dessen Zellen so groß sind, dass höchstens N davon sichtbar
+            sind. Die Datenbank liefert pro belegter Zelle genau einen Repräsentanten (den mit der größten Kapazität) und die
+            Anzahl der Punkte in der Zelle – also nie mehr als N Zeilen.</p>
+          <p><b>Ausreißer:</b> Ein isolierter Punkt ist allein in seiner Zelle und damit automatisch ihr Repräsentant.
+            Zusammengefasst wird nur, was auf dem Bildschirm ohnehin überlappen würde, und die Anzahl macht das sichtbar
+            (größerer, oranger Kreis). Es fehlt nichts stillschweigend. Bei kleinem N auf großem Ausschnitt steckt ein
+            Ausreißer zunächst in einer Gruppe und erscheint beim Hineinzoomen einzeln.</p>
+          <p><b>Stabile Zellen:</b> Das Raster hängt an Weltkoordinaten (<code>floor(lng / zellbreite)</code>), nicht am
+            Bildschirmrand, und die Zellgröße nur von Zoom und Fenstergröße. Nord-Süd wird in Web-Mercator-y gerechnet, damit die
+            Zellen quadratisch sind. Beim Verschieben springen die Marker deshalb nicht.</p>
+          <pre><code>WITH pts AS (
+  SELECT id, latitude, longitude, capacity, name,
+         floor(longitude / $5)::int                             AS cx,
+         floor(ln(tan(pi()/4 + radians(latitude)/2)) / $6)::int AS cy
+  FROM locations
+  WHERE point(longitude, latitude) &lt;@ box(point($1,$2), point($3,$4))
+),
+ranked AS (
+  SELECT *,
+         count(*)     OVER (PARTITION BY cx, cy)                            AS anzahl,
+         row_number() OVER (PARTITION BY cx, cy ORDER BY capacity DESC, id) AS rn
+  FROM pts
+)
+SELECT id, latitude, longitude, capacity, name, anzahl
+FROM ranked
+WHERE rn = 1
+LIMIT $7;</code></pre>
+        </details>
+      </section>
+    </div>
+  </aside>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const MODES = { grid: 'Raster', all: 'Alles', area: 'Bereich' };
+const AUSTRIA = [[46.37, 9.53], [49.02, 17.16]];
+
+const map = L.map('map', { preferCanvas: true, minZoom: 3, zoomControl: true });
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+}).addTo(map);
+map.fitBounds(AUSTRIA);
+
+map.createPane('grid').style.zIndex = 390; // unter den Markern (overlayPane = 400)
+const gridRenderer = L.svg({ pane: 'grid' });
+let gridLayer = null;
+let markerLayer = null;
+const tip = L.tooltip({ direction: 'top', offset: [0, -4], opacity: 0.95 });
+
+const state = {
+  mode: 'grid',
+  n: 300,
+  controller: null,
+  debounce: null,
+  busy: false,      // Vergleich läuft
+  current: null,    // zuletzt gerendertes Ergebnis { mode, rows, meta, bbox }
+  history: [],
+};
+
+// ---------- Darstellung ----------
+
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+function showTip(e) {
+  const [, , , cap, name, count] = e.layer.options.row;
+  tip.setLatLng(e.layer.getLatLng()).setContent(
+    `<b>${esc(name)}</b><br>Kapazität: ${cap}` + (count > 1 ? `<br>+ ${count - 1} weitere hier` : ''),
+  );
+  map.openTooltip(tip);
+}
+
+function renderRows(rows, meta) {
+  // Gruppenkreis höchstens eine halbe Zelle groß, sonst überlappen Nachbarzellen auf kleinen Bildschirmen.
+  const maxRadius = meta.cellPx ? Math.max(4, meta.cellPx / 2) : Infinity;
+  // Gruppen zuerst zeichnen, damit kleine Einzelpunkte oben liegen.
+  const sorted = rows.slice().sort((a, b) => b[5] - a[5]);
+  const markers = new Array(sorted.length);
+  for (let i = 0; i < sorted.length; i++) {
+    const r = sorted[i];
+    const count = r[5];
+    const group = count > 1;
+    markers[i] = L.circleMarker([r[1], r[2]], {
+      radius: group ? Math.min(4 + 3 * Math.log2(count), maxRadius) : 4,
+      color: group ? '#c2410c' : '#1d4ed8',
+      fillColor: group ? '#f97316' : '#3b82f6',
+      fillOpacity: group ? 0.55 : 0.85,
+      weight: 1,
+      row: r,
+    });
+  }
+  const next = L.featureGroup(markers);
+  next.on('mouseover click', showTip).on('mouseout', () => map.closeTooltip(tip));
+  if (markerLayer) map.removeLayer(markerLayer);
+  map.closeTooltip(tip);
+  markerLayer = next.addTo(map);
+}
+
+const mercY = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+const invMercY = (y) => (2 * Math.atan(Math.exp(y)) - Math.PI / 2) * 180 / Math.PI;
+
+function drawGrid() {
+  if (gridLayer) { map.removeLayer(gridLayer); gridLayer = null; }
+  const cur = state.current;
+  if (!$('showGrid').checked || !cur || cur.mode !== 'grid') return;
+  const { cellLng, cellY } = cur.meta;
+  const b = cur.bbox;
+  const lines = [];
+  for (let k = Math.ceil(b.minx / cellLng); k * cellLng <= b.maxx; k++) {
+    lines.push([[b.miny, k * cellLng], [b.maxy, k * cellLng]]);
+  }
+  for (let k = Math.ceil(mercY(b.miny) / cellY); k * cellY <= mercY(b.maxy); k++) {
+    const lat = invMercY(k * cellY);
+    lines.push([[lat, b.minx], [lat, b.maxx]]);
+  }
+  gridLayer = L.polyline(lines, {
+    renderer: gridRenderer, pane: 'grid', interactive: false, color: '#0f172a', weight: 1, opacity: 0.3,
+  }).addTo(map);
+}
+
+const fmtMs = (v) => (v < 10 ? v.toFixed(1) : Math.round(v)) + ' ms';
+const fmtBytes = (b) => (b == null || Number.isNaN(b) ? '–' : b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) + ' KB' : (b / 1048576).toFixed(2) + ' MB');
+const fmtInt = (v) => v.toLocaleString('de-AT');
+
+function showMetrics(r) {
+  const m = r.m;
+  const items = [
+    ['Modus', MODES[r.mode]],
+    ['Geladen / im Ausschnitt', `${fmtInt(m.rows)} / ${fmtInt(m.totalInView)}`],
+    ['Payload roh / gzip', `${fmtBytes(m.raw)} / ${fmtBytes(m.sent)}`],
+    ['DB-Zeit', fmtMs(m.db)],
+    ['Netzwerk + Parse', fmtMs(m.net)],
+    ['Render', fmtMs(m.render)],
+    ['Gesamt', fmtMs(m.total)],
+  ];
+  if (r.mode === 'grid') items.push(['Zellgröße', `${Math.round(r.meta.cellPx)} px`]);
+  $('metrics').innerHTML = items.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+  $('summary').textContent = `${fmtInt(m.rows)} / ${fmtInt(m.totalInView)} · ${fmtMs(m.total)}`;
+  const warn = $('warn');
+  warn.hidden = !r.meta.truncated;
+  warn.textContent = r.meta.truncated ? `Limit erreicht: nur die ersten ${fmtInt(m.rows)} Punkte im Ausschnitt geladen (AREA_LIMIT).` : '';
+}
+
+function addHistory(r) {
+  state.history.unshift({ time: new Date(), mode: r.mode, m: r.m });
+  state.history.length = Math.min(state.history.length, 10);
+  $('history').innerHTML =
+    '<tr><th>Zeit</th><th>Modus</th><th>Zeilen</th><th>gzip</th><th>DB</th><th>Gesamt</th></tr>' +
+    state.history.map((h) => `<tr><td>${h.time.toLocaleTimeString('de-AT')}</td><td>${MODES[h.mode]}</td>` +
+      `<td>${fmtInt(h.m.rows)}</td><td>${fmtBytes(h.m.sent)}</td><td>${fmtMs(h.m.db)}</td><td>${fmtMs(h.m.total)}</td></tr>`).join('');
+}
+
+// ---------- Laden ----------
+
+function viewParams() {
+  const b = map.getBounds();
+  const size = map.getSize();
+  return {
+    minx: b.getWest(), miny: b.getSouth(), maxx: b.getEast(), maxy: b.getNorth(),
+    z: map.getZoom(), w: size.x, h: size.y,
+  };
+}
+
+function urlFor(mode, p, n) {
+  const fix = (v) => v.toFixed(6);
+  const bbox = `minx=${fix(p.minx)}&miny=${fix(p.miny)}&maxx=${fix(p.maxx)}&maxy=${fix(p.maxy)}`;
+  if (mode === 'all') return '/api/all';
+  if (mode === 'area') return `/api/area?${bbox}`;
+  return `/api/grid?${bbox}&z=${p.z}&w=${p.w}&h=${p.h}&n=${n}`;
+}
+
+const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
+
+// Ein kompletter Durchlauf: fetch -> JSON -> Layer -> ein Frame. Misst alle Abschnitte.
+async function run(mode, p, { signal, bust = false } = {}) {
+  let url = urlFor(mode, p, state.n);
+  if (bust) url += (url.includes('?') ? '&' : '?') + '_=' + Date.now() + Math.random().toString(36).slice(2);
+  const t0 = performance.now();
+  const res = await fetch(url, { signal, cache: bust ? 'no-store' : 'default' });
+  if (!res.ok) throw new Error(`${res.status}: ${(await res.json().catch(() => ({}))).error || res.statusText}`);
+  const json = await res.json();
+  const t1 = performance.now();
+  const bbox = mode === 'all' ? viewParams() : p;
+  state.current = { mode, rows: json.rows, meta: json.meta, bbox };
+  renderRows(json.rows, json.meta);
+  drawGrid();
+  await nextFrame();
+  const t2 = performance.now();
+  const raw = Number(res.headers.get('X-Raw-Bytes'));
+  const sent = Number(res.headers.get('Content-Length') || res.headers.get('X-Sent-Bytes'));
+  const db = json.meta.dbMs;
+  const m = {
+    rows: json.meta.rows, totalInView: json.meta.totalInView, raw, sent, db,
+    net: Math.max(0, t1 - t0 - db), render: t2 - t1, total: t2 - t0,
+  };
+  state.current.m = m;
+  return state.current;
+}
+
+async function load(mode) {
+  if (state.busy) return;
+  if (state.controller) state.controller.abort();
+  const controller = (state.controller = new AbortController());
+  try {
+    const r = await run(mode, viewParams(), { signal: controller.signal });
+    if (controller.signal.aborted) return;
+    showMetrics(r);
+    addHistory(r);
+    if (mode === 'area') $('searchArea').hidden = true;
+  } catch (err) {
+    if (err.name === 'AbortError') return;
+    $('summary').textContent = 'Fehler';
+    $('metrics').innerHTML = `<dt>Fehler</dt><dd>${esc(err.message)}</dd>`;
+  } finally {
+    if (state.controller === controller) state.controller = null;
+  }
+}
+
+function scheduleGrid() {
+  clearTimeout(state.debounce);
+  state.debounce = setTimeout(() => { if (state.mode === 'grid') load('grid'); }, 250);
+}
+
+function setMode(mode) {
+  state.mode = mode;
+  document.querySelector(`input[name=mode][value=${mode}]`).checked = true;
+  clearTimeout(state.debounce);
+  load(mode);
+}
+
+// ---------- Vergleich ----------
+
+const median = (xs) => {
+  const s = xs.slice().sort((a, b) => a - b);
+  const mid = s.length >> 1;
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+};
+
+async function compare() {
+  if (state.busy) return;
+  if (state.controller) state.controller.abort();
+  clearTimeout(state.debounce);
+  state.busy = true;
+  setControlsDisabled(true);
+  $('searchArea').hidden = true;
+  const prev = state.current;
+  const p = viewParams();
+  const runs = 5;
+  const order = ['grid', 'area', 'all'];
+  const results = {};
+  try {
+    for (const mode of order) {
+      results[mode] = [];
+      for (let i = 1; i <= runs; i++) {
+        $('compareStatus').textContent = ` ${MODES[mode]} ${i}/${runs} …`;
+        results[mode].push((await run(mode, p, { bust: true })).m);
+      }
+    }
+    const cols = [
+      ['Zeilen', 'rows', fmtInt], ['gzip', 'sent', fmtBytes], ['DB', 'db', fmtMs],
+      ['Netz', 'net', fmtMs], ['Render', 'render', fmtMs], ['Gesamt', 'total', fmtMs],
+    ];
+    const med = Object.fromEntries(order.map((mode) => [mode, Object.fromEntries(cols.map(([, k]) => [k, median(results[mode].map((m) => m[k]))]))]));
+    const best = Object.fromEntries(cols.map(([, k]) => [k, Math.min(...order.map((mode) => med[mode][k]))]));
+    const t = $('compareTable');
+    t.innerHTML = `<tr><th>Median</th>${cols.map(([h]) => `<th>${h}</th>`).join('')}</tr>` +
+      order.map((mode) => `<tr><td>${MODES[mode]}</td>${cols.map(([, k, f]) =>
+        `<td class="${med[mode][k] === best[k] ? 'best' : ''}">${f(med[mode][k])}</td>`).join('')}</tr>`).join('');
+    t.hidden = false;
+    $('compareStatus').textContent = '';
+  } catch (err) {
+    $('compareStatus').textContent = ' Fehler: ' + err.message;
+  } finally {
+    // Vorherigen Zustand wiederherstellen (ohne neue Anfrage).
+    state.current = prev;
+    if (prev) { renderRows(prev.rows, prev.meta); showMetrics(prev); } else if (markerLayer) map.removeLayer(markerLayer);
+    drawGrid();
+    state.busy = false;
+    setControlsDisabled(false);
+  }
+}
+
+function setControlsDisabled(disabled) {
+  document.querySelectorAll('#panelBody input, #compare').forEach((el) => { el.disabled = disabled; });
+}
+
+// ---------- Events ----------
+
+let userMoved = false;
+map.on('dragstart zoomstart', () => { userMoved = true; });
+map.on('moveend', () => {
+  if (state.busy) return;
+  if (userMoved) $('searchArea').hidden = false;
+  if (state.mode === 'grid') scheduleGrid();
+});
+map.on('resize', () => { if (state.mode === 'grid' && !state.busy) scheduleGrid(); });
+
+$('searchArea').addEventListener('click', () => { userMoved = false; setMode('area'); });
+document.querySelectorAll('input[name=mode]').forEach((el) => el.addEventListener('change', () => setMode(el.value)));
+$('n').addEventListener('input', (e) => {
+  state.n = Number(e.target.value);
+  $('nValue').textContent = state.n;
+  if (state.mode === 'grid') scheduleGrid();
+});
+$('showGrid').addEventListener('change', drawGrid);
+$('compare').addEventListener('click', compare);
+
+function setCollapsed(collapsed) {
+  $('panel').classList.toggle('collapsed', collapsed);
+  $('toggle').textContent = collapsed ? 'Ausklappen' : 'Einklappen';
+  $('toggle').setAttribute('aria-expanded', String(!collapsed));
+  map.invalidateSize(); // auf dem Handy ändert sich die Kartenhöhe
+}
+$('toggle').addEventListener('click', () => setCollapsed(!$('panel').classList.contains('collapsed')));
+if (matchMedia('(max-width: 700px)').matches) setCollapsed(true);
+
+load('grid');
+</script>
+</body>
+</html>

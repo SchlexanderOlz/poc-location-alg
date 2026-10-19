@@ -1,0 +1,17 @@
+{
+  "name": "poc-location-alg",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Demo: höchstens N Standorte auf der Karte, ohne verschluckte Ausreißer (Raster-Ausdünnung in PostgreSQL)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node check.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  }
+}

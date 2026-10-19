@@ -1,0 +1,29 @@
+services:
+  app:
+    build: .
+    expose: ["3000"]
+    environment:
+      DATABASE_URL: postgres://demo:${POSTGRES_PASSWORD}@db:5432/demo
+      PORT: "3000"
+      SEED_COUNT: ${SEED_COUNT:-5000}
+      AREA_LIMIT: ${AREA_LIMIT:-50000}
+      RESEED: ${RESEED:-false}
+    depends_on:
+      db: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 10s
+      retries: 5
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: demo
+      POSTGRES_DB: demo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo -d demo"]
+      interval: 5s
+      retries: 10
+volumes:
+  pgdata:
