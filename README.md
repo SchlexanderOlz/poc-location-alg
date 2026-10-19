@@ -1,5 +1,7 @@
 # Max-N-Standorte auf der Karte, ohne verschluckte Ausreißer
 
+Live: http://poc-location-alg.rayrodbay.dev · Code: https://github.com/SchlexanderOlz/poc-location-alg
+
 Demo: Eine OpenStreetMap-Karte zeigt **höchstens N Standorte**, egal wie viele in der Datenbank liegen, und lässt dabei
 keinen isolierten Punkt stillschweigend weg. Zum Vergleich gibt es zwei naive Varianten („alles laden“, „alles im
 Ausschnitt“) mit gemessenen Ladezeiten.

@@ -35,6 +35,8 @@
   }
   #panel header h1 { font-size: 15px; margin: 0; flex: 1; white-space: nowrap; }
   #summary { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  #repo { color: var(--accent); font-size: 12.5px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+  #repo:hover { text-decoration: underline; }
   #toggle { border: 1px solid var(--line); background: var(--bg); border-radius: 6px; padding: 4px 9px; cursor: pointer; font: inherit; }
   #panelBody { overflow: auto; padding: 4px 12px 12px; }
   #panel.collapsed #panelBody { display: none; }
@@ -97,6 +99,8 @@
     <header>
       <h1>Max-N-Standorte</h1>
       <span id="summary"></span>
+      <a id="repo" href="https://github.com/SchlexanderOlz/poc-location-alg" target="_blank" rel="noopener"
+         title="Quellcode auf GitHub">Code ↗</a>
       <button id="toggle" type="button" aria-expanded="true" aria-controls="panelBody">Einklappen</button>
     </header>
     <div id="panelBody">
@@ -174,6 +178,8 @@ SELECT id, latitude, longitude, capacity, name, anzahl
 FROM ranked
 WHERE rn = 1
 LIMIT $7;</code></pre>
+          <p>Quellcode, Deployment und Anleitung für die eigene Datenbank:
+            <a href="https://github.com/SchlexanderOlz/poc-location-alg" target="_blank" rel="noopener">github.com/SchlexanderOlz/poc-location-alg</a></p>
         </details>
       </section>
     </div>
