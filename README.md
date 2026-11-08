@@ -21,6 +21,9 @@ public/index.html    gesamtes Frontend
 
 ## 1. Lokal starten
 
+Voraussetzungen: Docker mit Compose v2. Ohne Docker reichen Node.js ≥ 20 und ein laufendes PostgreSQL
+(`npm ci`, dann `DATABASE_URL=postgres://… npm start`).
+
 ```bash
 cp docker-compose.override.example.yml docker-compose.override.yml   # Port 3000 nach außen
 POSTGRES_PASSWORD=dev docker compose up --build
