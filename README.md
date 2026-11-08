@@ -21,7 +21,7 @@ public/index.html    gesamtes Frontend
 
 ## 1. Lokal starten
 
-Voraussetzungen: Docker mit Compose v2. Ohne Docker reichen Node.js ≥ 20 und ein laufendes PostgreSQL
+Voraussetzungen: Docker mit Compose v2 (`docker compose`, nicht `docker-compose`). Ohne Docker reichen Node.js ≥ 20 und ein laufendes PostgreSQL
 (`npm ci`, dann `DATABASE_URL=postgres://… npm start`).
 
 ```bash
